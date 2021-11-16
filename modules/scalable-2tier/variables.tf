@@ -23,3 +23,18 @@ variable "availability_zones" {
   type        = list(string)
   default     = []
 }
+variable "db_engine" {
+  description = "Type of RDS aurora such as aurora-postgresql or aurora-mysql"
+  type        = string
+  default     = null
+}
+variable "db_port" {
+  description = "DB port number"
+  type        = number
+  default     = null
+}
+variable "app_port" {
+  description = "Port of application server"
+  type        = number
+  default     = null
+}

@@ -8,12 +8,14 @@ provider "aws" {
     }
   }
 }
-module "vpc_new" {
+module "scalable_2tier" {
   source             = "./modules/scalable-2tier"
   project_name       = var.project_name
   environment        = var.environment
   region             = var.region
   vpc_cidr           = var.vpc_cidr
-  availability_zones = var.availability_zones
-
+  db_engine          = "aurora-postgresql"
+  db_port            = 5432
+  availability_zones = ["ap-southeast-2c", "ap-southeast-2a"]
+  app_port           = 8080
 }
