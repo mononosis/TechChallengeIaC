@@ -202,3 +202,120 @@ resource "random_password" "db_password" {
   length  = 16
   special = false
 }
+#--------------------------------------------------------------------------------------------------
+# Sc. Topology
+#--------------------------------------------------------------------------------------------------
+resource "aws_lb" "public" {
+  name                             = "web-alb"
+  load_balancer_type               = "application"
+  internal                         = false
+  enable_cross_zone_load_balancing = true
+
+  security_groups = [aws_security_group.web_alb.id]
+
+  subnets = aws_subnet.public.*.id
+
+}
+resource "aws_lb_target_group" "http" {
+  name        = "http"
+  port        = 80
+  protocol    = "HTTP"
+  vpc_id      = aws_vpc.this.id
+  target_type = "ip"
+}
+resource "aws_lb_listener" "http" {
+  load_balancer_arn = aws_lb.public.arn
+  protocol          = "HTTP"
+  port              = "80"
+
+  default_action {
+    target_group_arn = aws_lb_target_group.http.arn
+    type             = "forward"
+  }
+}
+resource "aws_db_subnet_group" "private" {
+  name       = "private-subnet-group"
+  subnet_ids = aws_subnet.private.*.id
+
+  tags = {
+    Name = "${var.project_name}-PRIV-SNG"
+  }
+}
+resource "aws_rds_cluster" "serverless" {
+  cluster_identifier   = "aurora-cluster"
+  availability_zones   = var.availability_zones
+  database_name        = var.db_name
+  master_username      = var.db_username
+  master_password      = random_password.db_password.result
+  engine               = var.db_engine
+  db_subnet_group_name = aws_db_subnet_group.private.name
+  engine_mode          = "serverless"
+
+  enabled_cloudwatch_logs_exports = []
+
+  skip_final_snapshot = true
+  apply_immediately   = true
+
+  vpc_security_group_ids = [aws_security_group.db_private_net.id]
+
+  tags = {
+    Name = "${var.project_name}-SERVERLES-RDS"
+  }
+
+  lifecycle {
+    ignore_changes = [
+      # Ignore changes to tags, e.g. because a management agent
+      # updates these based on some ruleset managed elsewhere.
+      availability_zones,
+    ]
+  }
+  scaling_configuration {
+    min_capacity = 2
+  }
+}
+resource "aws_ecs_cluster" "this" {
+  name = "${var.project_name}Cluster"
+
+  setting {
+    name  = "containerInsights"
+    value = "enabled"
+  }
+}
+resource "aws_ecs_service" "this" {
+  name            = "fargate-service"
+  launch_type     = "FARGATE"
+  cluster         = aws_ecs_cluster.this.id
+  task_definition = aws_ecs_task_definition.this.arn
+  desired_count   = 2
+
+  load_balancer {
+    target_group_arn = aws_lb_target_group.http.arn
+    container_name   = var.project_name
+    container_port   = var.app_port
+  }
+
+  network_configuration {
+    subnets         = aws_subnet.private.*.id
+    security_groups = [aws_security_group.ecs_tasks.id]
+  }
+
+  depends_on = [
+    aws_iam_role_policy_attachment.ecs_tasks,
+    aws_secretsmanager_secret_version.db_password
+  ]
+}
+resource "aws_ecs_task_definition" "this" {
+  family       = "${var.project_name}-family"
+  network_mode = "awsvpc"
+
+  cpu                      = 256
+  memory                   = 512
+  requires_compatibilities = ["FARGATE"]
+  execution_role_arn       = aws_iam_role.ecs_tasks.arn
+  task_role_arn            = aws_iam_role.ecs_tasks.arn
+
+  container_definitions = jsonencode(var.service_task)
+}
+resource "aws_cloudwatch_log_group" "this" {
+  name = var.project_name
+}

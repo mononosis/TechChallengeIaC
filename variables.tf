@@ -28,3 +28,37 @@ variable "availability_zones" {
   type        = list(any)
   default     = ["ap-southeast-2c", "ap-southeast-2a"]
 }
+variable "app_host" {
+  description = "The host ip where the application is listening from"
+  type        = string
+  default     = "0.0.0.0"
+}
+variable "long_running_task_command" {
+  description = "Region of the VPC"
+  type        = map(any)
+  default = {
+    command = ["serve"]
+  }
+}
+variable "standalone_task_command" {
+  description = "Region of the VPC"
+  type        = map(any)
+  default = {
+    command = ["updatedb", "-s"]
+  }
+}
+variable "app_image_repository" {
+  description = "The repository name or registry URL"
+  type        = string
+  default     = "servian"
+}
+variable "app_image_name" {
+  description = "Name of the application image"
+  type        = string
+  default     = "techchallengeapp"
+}
+variable "app_image_tag" {
+  description = "Tag or version of the application image"
+  type        = string
+  default     = "latest"
+}

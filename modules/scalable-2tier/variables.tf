@@ -33,8 +33,29 @@ variable "db_port" {
   type        = number
   default     = null
 }
+variable "db_name" {
+  description = "Database name"
+  type        = string
+  default     = null
+}
+variable "db_username" {
+  description = "Database username"
+  type        = string
+  default     = null
+}
 variable "app_port" {
   description = "Port of application server"
   type        = number
   default     = null
 }
+variable "app_host" {
+  description = "The host ip where the application is listening from"
+  type        = string
+  default     = "0.0.0.0"
+}
+variable "service_task" {
+  description = "Region of the VPC"
+  type        = list
+  default = null
+}
+
