@@ -29,6 +29,28 @@ resource "aws_nat_gateway" "this" {
     Name = "${var.project_name}-NGW"
   }
 }
+resource "aws_default_route_table" "this" {
+  default_route_table_id = aws_vpc.this.default_route_table_id
+  propagating_vgws       = []
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.this.id
+  }
+  tags = {
+    Name = "${var.project_name}-IGW-RT"
+  }
+}
+resource "aws_route_table" "this" {
+  vpc_id = aws_vpc.this.id
+  route {
+    cidr_block     = "0.0.0.0/0"
+    nat_gateway_id = aws_nat_gateway.this.id
+  }
+  tags = {
+    Name = "${var.project_name}-NGW-RT"
+  }
+
+}
 resource "aws_subnet" "public" {
   count                   = length(var.availability_zones)
   cidr_block              = cidrsubnet(var.vpc_cidr, 8, count.index * 2)
@@ -49,27 +71,6 @@ resource "aws_subnet" "private" {
     Name = "${var.project_name}-${trimprefix(element(var.availability_zones, count.index), var.region)}-PRIV-SN"
   }
 }
-resource "aws_default_route_table" "this" {
-  default_route_table_id = aws_vpc.this.default_route_table_id
-  propagating_vgws       = []
-  route {
-    cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.this.id
-  }
-  tags = {
-    Name = "${var.project_name}-IGW-RT"
-  }
-}
-resource "aws_route_table" "nat_allocated" {
-  vpc_id = aws_vpc.this.id
-  route {
-    cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.this.id
-  }
-  tags = {
-    Name = "${var.project_name}-NGW-RT"
-  }
-}
 resource "aws_route_table_association" "public" {
   count          = length(aws_subnet.public.*)
   subnet_id      = element(aws_subnet.public.*.id, count.index)
@@ -78,12 +79,12 @@ resource "aws_route_table_association" "public" {
 resource "aws_route_table_association" "private" {
   count          = length(aws_subnet.private.*)
   subnet_id      = element(aws_subnet.private.*.id, count.index)
-  route_table_id = aws_route_table.nat_allocated.id
+  route_table_id = aws_route_table.this.id
 }
 #--------------------------------------------------------------------------------------------------
 # Sc. Security
 #--------------------------------------------------------------------------------------------------
-resource "aws_security_group" "db_private_net" {
+resource "aws_security_group" "db" {
   name   = var.db_engine
   vpc_id = aws_vpc.this.id
 
@@ -97,7 +98,7 @@ resource "aws_security_group" "db_private_net" {
     Name = "${var.project_name}-DB-SG"
   }
 }
-resource "aws_security_group" "web_alb" {
+resource "aws_security_group" "web" {
   name   = "web-alb"
   vpc_id = aws_vpc.this.id
 
@@ -126,7 +127,7 @@ resource "aws_security_group" "web_alb" {
     Name = "${var.project_name}-ALB-SG"
   }
 }
-resource "aws_security_group" "ecs_tasks" {
+resource "aws_security_group" "app" {
   name   = "ecs-tasks"
   vpc_id = aws_vpc.this.id
 
@@ -148,7 +149,7 @@ resource "aws_security_group" "ecs_tasks" {
     Name = "${var.project_name}-Tasks-SG"
   }
 }
-resource "aws_iam_role_policy_attachment" "ecs_tasks" {
+resource "aws_iam_role_policy_attachment" "this" {
   role       = aws_iam_role.ecs_tasks.name
   policy_arn = data.aws_iam_policy.ecs_tasks.arn
 }
@@ -203,16 +204,15 @@ resource "random_password" "db_password" {
   special = false
 }
 #--------------------------------------------------------------------------------------------------
-# Sc. Topology
+# Sc. Main
 #--------------------------------------------------------------------------------------------------
-resource "aws_lb" "public" {
+resource "aws_lb" "web" {
   name                             = "web-alb"
   load_balancer_type               = "application"
   internal                         = false
   enable_cross_zone_load_balancing = true
 
-  security_groups = [aws_security_group.web_alb.id]
-
+  security_groups = [aws_security_group.web.id]
   subnets = aws_subnet.public.*.id
 
 }
@@ -222,9 +222,12 @@ resource "aws_lb_target_group" "http" {
   protocol    = "HTTP"
   vpc_id      = aws_vpc.this.id
   target_type = "ip"
+  health_check {
+    path = "/healthcheck/"
+  }
 }
 resource "aws_lb_listener" "http" {
-  load_balancer_arn = aws_lb.public.arn
+  load_balancer_arn = aws_lb.web.arn
   protocol          = "HTTP"
   port              = "80"
 
@@ -241,7 +244,7 @@ resource "aws_db_subnet_group" "private" {
     Name = "${var.project_name}-PRIV-SNG"
   }
 }
-resource "aws_rds_cluster" "serverless" {
+resource "aws_rds_cluster" "this" {
   cluster_identifier   = "aurora-cluster"
   availability_zones   = var.availability_zones
   database_name        = var.db_name
@@ -256,7 +259,7 @@ resource "aws_rds_cluster" "serverless" {
   skip_final_snapshot = true
   apply_immediately   = true
 
-  vpc_security_group_ids = [aws_security_group.db_private_net.id]
+  vpc_security_group_ids = [aws_security_group.db.id]
 
   tags = {
     Name = "${var.project_name}-SERVERLES-RDS"
@@ -296,11 +299,11 @@ resource "aws_ecs_service" "this" {
 
   network_configuration {
     subnets         = aws_subnet.private.*.id
-    security_groups = [aws_security_group.ecs_tasks.id]
+    security_groups = [aws_security_group.app.id]
   }
 
   depends_on = [
-    aws_iam_role_policy_attachment.ecs_tasks,
+    aws_iam_role_policy_attachment.this,
     aws_secretsmanager_secret_version.db_password
   ]
 }

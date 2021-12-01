@@ -65,11 +65,9 @@ module "scalable_2tier" {
   db_engine            = "aurora-postgresql"
   db_port              = 5432
   availability_zones   = ["ap-southeast-2c", "ap-southeast-2a"]
-  app_port             = 8080
+  app_port             = 8081
   db_username          = "principal"
   db_name              = "app"
-  #app_image_repository = "servian"
-  #app_image_name       = "techchallengeapp"
   service_task = local.service_task
 
 }

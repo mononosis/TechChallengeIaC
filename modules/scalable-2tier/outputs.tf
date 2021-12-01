@@ -16,7 +16,7 @@ output "db_name" {
 }
 output "db_host" {
   description = "The secret password for the database"
-  value       = aws_rds_cluster.serverless.endpoint
+  value       = aws_rds_cluster.this.endpoint
 }
 output "app_port" {
   description = "The secret password for the database"
@@ -40,7 +40,7 @@ output "private_subnet_ids" {
 }
 output "web_alb_sg_id" {
   description = "Private subnet"
-  value       = aws_security_group.web_alb.id
+  value       = aws_security_group.web.id
 }
 output "project_name" {
   description = "Private subnet"
