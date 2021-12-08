@@ -46,3 +46,7 @@ output "project_name" {
   description = "Private subnet"
   value       = var.project_name
 }
+output "lb_dns_name" {
+  description = "The DNS name of the load balancer."
+  value       = aws_lb.web.dns_name
+}

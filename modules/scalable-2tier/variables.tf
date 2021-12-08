@@ -58,4 +58,9 @@ variable "service_task" {
   type        = list
   default = null
 }
+variable "scaling_policy_target_value" {
+  description = "Region of the VPC"
+  type        = number
+  default = 50
+}
 
