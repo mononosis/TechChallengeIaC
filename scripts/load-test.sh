@@ -1,13 +1,14 @@
 #!/bin/bash
 
 # The scrip will first create 1000 records or check if the number of 
-# records is less than that. Then make 10 parallel GET request every 
+# records is less than that. Then make 50 parallel GET request every 
 # second. It takes around 10 mins to scale up the number of tasks if 
 # 10% of CPU usage is set as the trigger for the autoscaling policy. 
 # This is set as default for the Chaos Testing environment.
 
 # jq and aws cli are required in order to perform the test 
-which jq
+echo -e "\nChecking for dependencies...\n"
+which jq 
 
 if [ "${?}" != 0 ]
 then 
@@ -23,9 +24,20 @@ then
    exit 1
 fi
 
+which watch
+
+if [ "${?}" != 0 ]
+then 
+   echo "Please install watch before running the script"
+   exit 1
+fi
+
+echo -e "\nRequired dependencies installed\n"
+
 dns=$(terraform output --raw lb_dns_name)
 cluster_name=$(terraform output --raw cluster_name)
 profile=$(terraform output --raw profile)
+region=$(terraform output --raw region)
 
 get_data_new_title(){
 cat <<EOF
@@ -50,21 +62,35 @@ get_records(){
 }
 
 length=$(curl -s "http://${dns}/api/task/" | jq length)
+remainder=$(( 1000 - $length ))
+
+echo "$length records already in the database"
 
 if [ $length -lt 1000 ]
 then 
-  for i in range {1..1000} ; do $(create_new_record); done 
+  echo "Creating ${remainder} records..."
+  for i in range `seq 1 $remainder` 
+  do 
+    $(create_new_record)
+    if [ $(($i%4)) == 0 ]
+    then 
+      length=$(curl -s "http://${dns}/api/task/" | jq length)
+      remainder=$(( 1000 - $length ))
+      echo -ne "${remainder} remaining records to be created  "\\r
+    fi
+  done 
 else 
   echo "Skipping the creation of new records. The database contains ${length}"
 fi
 
-echo "In order to watch the number of tasks scaling up and down over time please run the following command in another terminal:"
+echo -e "\nIn order to watch the number of tasks scaling up and down over time please leave this script running and run the following command in another terminal:"
 echo ""
-echo "    aws ecs list-tasks --cluster ${cluster_name} --profile ${profile}"
+echo "    watch aws ecs list-tasks --cluster ${cluster_name} --profile ${profile} --region ${region}"
+echo ""
 
 for i in range {1..10000} 
 do 
-  for i in range {1..10} 
+  for i in range {1..90} 
   do 
     $(get_records) &
   done
