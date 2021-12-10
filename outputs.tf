@@ -1,16 +1,16 @@
-output "lb_dns_name" {
-  description = "The DNS name of the load balancer."
-  value       = aws_lb.web.dns_name
-}
 output "cluster_name" {
-  description = "The DNS name of the load balancer."
+  description = "Cluster name where fargate tasks and services run"
   value       = aws_ecs_cluster.this.name
 }
 output "profile" {
-  description = "The DNS name of the load balancer."
+  description = "Name specified in the profile flag after aws configure"
   value       = var.aws_profile
 }
 output "region" {
-  description = "The DNS name of the load balancer."
+  description = "AWS Region"
   value       = var.region
+}
+output "application_url" {
+  description = "The DNS name of the load balancer."
+  value       = "http://${aws_lb.web.dns_name}"
 }

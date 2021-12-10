@@ -34,10 +34,10 @@ fi
 
 echo -e "\nRequired dependencies installed\n"
 
-dns=$(terraform output --raw lb_dns_name)
-cluster_name=$(terraform output --raw cluster_name)
-profile=$(terraform output --raw profile)
-region=$(terraform output --raw region)
+application_url=$(terraform -chdir=../ output --raw application_url)
+cluster_name=$(terraform -chdir=../ output --raw cluster_name)
+profile=$(terraform -chdir=../ output --raw profile)
+region=$(terraform -chdir=../ output --raw region)
 
 get_data_new_title(){
 cat <<EOF
@@ -51,17 +51,17 @@ EOF
 }
 
 create_new_record(){
-  curl "http://${dns}/api/task/" \
+  curl "${application_url}/api/task/" \
     -H 'Content-Type: application/json' \
     --data-raw "$(get_data_new_title $RANDOM)" \
     --insecure > /dev/null 2>&1 
 }
 
 get_records(){
-  curl "http://${dns}/api/task/" > /dev/null 2>&1
+  curl "${application_url}/api/task/" > /dev/null 2>&1
 }
 
-length=$(curl -s "http://${dns}/api/task/" | jq length)
+length=$(curl -s "${application_url}/api/task/" | jq length)
 remainder=$(( 1000 - $length ))
 
 echo "$length records already in the database"
@@ -74,7 +74,7 @@ then
     $(create_new_record)
     if [ $(($i%4)) == 0 ]
     then 
-      length=$(curl -s "http://${dns}/api/task/" | jq length)
+      length=$(curl -s "${application_url}/api/task/" | jq length)
       remainder=$(( 1000 - $length ))
       echo -ne "${remainder} remaining records to be created  "\\r
     fi
@@ -90,7 +90,7 @@ echo ""
 
 for i in range {1..10000} 
 do 
-  for i in range {1..90} 
+  for i in range {1..50} 
   do 
     $(get_records) &
   done
